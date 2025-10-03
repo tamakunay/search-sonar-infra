@@ -225,9 +225,9 @@ resource "aws_cloudwatch_metric_alarm" "worker_job_failure_rate" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   metric_query {
-    id = "e1"
-    expression = "m2/m1*100"
-    label = "Job Failure Rate"
+    id          = "e1"
+    expression  = "m2/m1*100"
+    label       = "Job Failure Rate"
     return_data = "true"
   }
 

@@ -148,13 +148,13 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = var.api_cpu
   memory                   = var.api_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn           = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {
       name  = "api"
       image = var.api_image
-      
+
       portMappings = [
         {
           containerPort = 3000
@@ -194,10 +194,10 @@ resource "aws_ecs_task_definition" "api" {
       }
 
       healthCheck = {
-        command = ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
-        interval = 30
-        timeout = 5
-        retries = 3
+        command     = ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
         startPeriod = 60
       }
 
@@ -216,7 +216,7 @@ resource "aws_ecs_task_definition" "worker" {
   cpu                      = var.worker_cpu
   memory                   = var.worker_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn           = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {

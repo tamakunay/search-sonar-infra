@@ -24,11 +24,11 @@ redis_node_type       = "cache.t3.micro"
 redis_num_cache_nodes = 1
 
 # ECS Configuration
-api_cpu           = 256
-api_memory        = 512
-worker_cpu        = 256
-worker_memory     = 512
-api_desired_count = 1
+api_cpu              = 256
+api_memory           = 512
+worker_cpu           = 256
+worker_memory        = 512
+api_desired_count    = 1
 worker_desired_count = 1
 
 # Container Images

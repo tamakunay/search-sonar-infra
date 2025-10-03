@@ -1,7 +1,7 @@
 # Local values for Redis connection strings
 locals {
-  redis_endpoint = aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address
-  redis_url_production = var.environment == "production" ? "redis://:${random_password.redis_auth_token[0].result}@${local.redis_endpoint}:${aws_elasticache_replication_group.redis.port}" : "redis://${local.redis_endpoint}:${aws_elasticache_replication_group.redis.port}"
+  redis_endpoint           = aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address
+  redis_url_production     = var.environment == "production" ? "redis://:${random_password.redis_auth_token[0].result}@${local.redis_endpoint}:${aws_elasticache_replication_group.redis.port}" : "redis://${local.redis_endpoint}:${aws_elasticache_replication_group.redis.port}"
   redis_url_non_production = "redis://${local.redis_endpoint}:${aws_elasticache_replication_group.redis.port}"
 }
 
@@ -37,6 +37,6 @@ output "redis_connection_secret_arn" {
 
 output "redis_connection_string" {
   description = "Redis connection string"
-  value = var.environment == "production" ? local.redis_url_production : local.redis_url_non_production
-  sensitive = true
+  value       = var.environment == "production" ? local.redis_url_production : local.redis_url_non_production
+  sensitive   = true
 }

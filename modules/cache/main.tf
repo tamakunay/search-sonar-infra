@@ -30,23 +30,23 @@ resource "aws_elasticache_parameter_group" "redis" {
 
 # ElastiCache Replication Group (Redis Cluster)
 resource "aws_elasticache_replication_group" "redis" {
-  replication_group_id       = "${var.name_prefix}-redis"
-  description                = "Redis cluster for ${var.name_prefix} BullMQ"
+  replication_group_id = "${var.name_prefix}-redis"
+  description          = "Redis cluster for ${var.name_prefix} BullMQ"
 
   # Node configuration
-  node_type               = var.redis_node_type
-  port                    = 6379
-  parameter_group_name    = aws_elasticache_parameter_group.redis.name
+  node_type            = var.redis_node_type
+  port                 = 6379
+  parameter_group_name = aws_elasticache_parameter_group.redis.name
 
   # Cluster configuration
-  num_cache_clusters      = var.redis_num_cache_nodes
-  
+  num_cache_clusters = var.redis_num_cache_nodes
+
   # Engine
-  engine_version          = "7.0"
-  
+  engine_version = "7.0"
+
   # Network
-  subnet_group_name       = var.cache_subnet_group_name
-  security_group_ids      = [var.redis_security_group_id]
+  subnet_group_name  = var.cache_subnet_group_name
+  security_group_ids = [var.redis_security_group_id]
 
   # Security
   at_rest_encryption_enabled = true
@@ -55,7 +55,7 @@ resource "aws_elasticache_replication_group" "redis" {
 
   # Backup
   snapshot_retention_limit = var.environment == "production" ? 5 : 1
-  snapshot_window         = "03:00-05:00"
+  snapshot_window          = "03:00-05:00"
 
   # Maintenance
   maintenance_window = "sun:05:00-sun:07:00"
@@ -123,10 +123,10 @@ resource "aws_secretsmanager_secret" "redis_connection" {
 resource "aws_secretsmanager_secret_version" "redis_connection" {
   secret_id = aws_secretsmanager_secret.redis_connection.id
   secret_string = jsonencode({
-    host      = aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address
-    port      = aws_elasticache_replication_group.redis.port
+    host       = aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address
+    port       = aws_elasticache_replication_group.redis.port
     auth_token = var.environment == "production" ? random_password.redis_auth_token[0].result : ""
-    url       = var.environment == "production" ? "redis://:${random_password.redis_auth_token[0].result}@${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}" : "redis://${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}"
+    url        = var.environment == "production" ? "redis://:${random_password.redis_auth_token[0].result}@${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}" : "redis://${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}"
   })
 }
 

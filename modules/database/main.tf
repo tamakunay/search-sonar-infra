@@ -86,20 +86,20 @@ resource "aws_db_instance" "main" {
 
   # Backup
   backup_retention_period = var.environment == "production" ? 7 : 1
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Monitoring
   monitoring_interval = var.environment == "production" ? 60 : 0
   monitoring_role_arn = var.environment == "production" ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
 
   # Performance Insights
-  performance_insights_enabled = var.environment == "production"
+  performance_insights_enabled          = var.environment == "production"
   performance_insights_retention_period = var.environment == "production" ? 7 : null
 
   # Deletion protection
-  deletion_protection = var.environment == "production"
-  skip_final_snapshot = var.environment != "production"
+  deletion_protection       = var.environment == "production"
+  skip_final_snapshot       = var.environment != "production"
   final_snapshot_identifier = var.environment == "production" ? "${var.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   # Enable automated minor version upgrades
@@ -195,7 +195,7 @@ resource "aws_db_instance" "read_replica" {
   monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring[0].arn
 
   # Performance Insights
-  performance_insights_enabled = true
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
   tags = merge(var.common_tags, {

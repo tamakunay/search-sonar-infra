@@ -15,10 +15,10 @@ resource "aws_lb" "main" {
 
 # Target Group for API
 resource "aws_lb_target_group" "api" {
-  name     = "${var.name_prefix}-api-tg"
-  port     = 3000
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+  name        = "${var.name_prefix}-api-tg"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
   target_type = "ip"
 
   health_check {

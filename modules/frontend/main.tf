@@ -11,7 +11,7 @@ resource "aws_amplify_app" "main" {
     {
       AMPLIFY_MONOREPO_APP_ROOT = "apps/web"
       NODE_ENV                  = var.environment
-      VITE_APP_NAME            = "Search Sonar"
+      VITE_APP_NAME             = "Search Sonar"
     },
     var.environment_variables
   )
