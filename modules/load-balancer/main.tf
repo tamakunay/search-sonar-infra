@@ -175,8 +175,6 @@ resource "aws_route53_record" "api" {
     zone_id                = aws_lb.main.zone_id
     evaluate_target_health = true
   }
-
-  tags = var.common_tags
 }
 
 # CloudWatch Alarms for ALB

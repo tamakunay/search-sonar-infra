@@ -51,7 +51,6 @@ resource "aws_elasticache_replication_group" "redis" {
   # Security
   at_rest_encryption_enabled = true
   transit_encryption_enabled = var.environment == "production"
-  auth_token_enabled         = var.environment == "production"
   auth_token                 = var.environment == "production" ? random_password.redis_auth_token[0].result : null
 
   # Backup
@@ -127,9 +126,7 @@ resource "aws_secretsmanager_secret_version" "redis_connection" {
     host      = aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address
     port      = aws_elasticache_replication_group.redis.port
     auth_token = var.environment == "production" ? random_password.redis_auth_token[0].result : ""
-    url       = var.environment == "production" ? 
-      "redis://:${random_password.redis_auth_token[0].result}@${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}" :
-      "redis://${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}"
+    url       = var.environment == "production" ? "redis://:${random_password.redis_auth_token[0].result}@${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}" : "redis://${aws_elasticache_replication_group.redis.configuration_endpoint_address != "" ? aws_elasticache_replication_group.redis.configuration_endpoint_address : aws_elasticache_replication_group.redis.primary_endpoint_address}:${aws_elasticache_replication_group.redis.port}"
   })
 }
 

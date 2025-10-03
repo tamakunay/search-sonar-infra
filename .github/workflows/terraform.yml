@@ -1,19 +1,80 @@
-# in .github/workflows/terraform.yml
-name: 'Terraform CI/CD'
+name: 'Search Sonar Infrastructure CI/CD'
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'environments/**'
+      - 'modules/**'
+      - '.github/workflows/terraform.yml'
   pull_request:
+    paths:
+      - 'environments/**'
+      - 'modules/**'
+      - '.github/workflows/terraform.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      action:
+        description: 'Terraform action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+env:
+  TF_VERSION: '1.13.3'
+  AWS_REGION: 'ap-southeast-1'
 
 jobs:
-  terraform:
-    name: 'Terraform'
+  validate:
+    name: 'Validate Terraform'
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Validate Staging
+        run: |
+          cd environments/staging
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate Production
+        run: |
+          cd environments/production
+          terraform init -backend=false
+          terraform validate
+
+  plan-staging:
+    name: 'Plan Staging'
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     defaults:
       run:
         working-directory: ./environments/staging
+    outputs:
+      plan-exitcode: ${{ steps.plan.outputs.exitcode }}
 
     steps:
       - name: Checkout
@@ -24,18 +85,269 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
         run: terraform init
 
       - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -no-color -out=tfplan
+        continue-on-error: true
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.exitcode == 2
+        with:
+          name: staging-tfplan
+          path: environments/staging/tfplan
+          retention-days: 5
+
+      - name: Comment PR
         if: github.event_name == 'pull_request'
-        run: terraform plan -no-color
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan (Staging) 📖
+
+            **Exit Code:** \`${{ steps.plan.outputs.exitcode }}\`
+
+            <details><summary>Show Plan</summary>
+
+            \`\`\`terraform
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+  deploy-staging:
+    name: 'Deploy Staging'
+    runs-on: ubuntu-latest
+    needs: [validate, plan-staging]
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' && github.event.inputs.action == 'apply')
+    defaults:
+      run:
+        working-directory: ./environments/staging
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Download Plan
+        if: needs.plan-staging.outputs.plan-exitcode == '2'
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-tfplan
+          path: environments/staging/
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: |
+          if [ -f tfplan ]; then
+            terraform apply -auto-approve tfplan
+          else
+            terraform apply -auto-approve
+          fi
+
+      - name: Get Outputs
+        id: outputs
+        run: |
+          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
+          echo "frontend_url=$(terraform output -raw frontend_url)" >> $GITHUB_OUTPUT
+          echo "dashboard_url=$(terraform output -raw cloudwatch_dashboard_url)" >> $GITHUB_OUTPUT
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Staging Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Infrastructure Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "- **API URL**: ${{ steps.outputs.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend URL**: ${{ steps.outputs.outputs.frontend_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **CloudWatch Dashboard**: ${{ steps.outputs.outputs.dashboard_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [View API](${{ steps.outputs.outputs.api_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Frontend](${{ steps.outputs.outputs.frontend_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Monitoring](${{ steps.outputs.outputs.dashboard_url }})" >> $GITHUB_STEP_SUMMARY
+
+  plan-production:
+    name: 'Plan Production'
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    defaults:
+      run:
+        working-directory: ./environments/production
+    outputs:
+      plan-exitcode: ${{ steps.plan.outputs.exitcode }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -no-color -out=tfplan
+        continue-on-error: true
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.exitcode == 2
+        with:
+          name: production-tfplan
+          path: environments/production/tfplan
+          retention-days: 5
+
+  deploy-production:
+    name: 'Deploy Production'
+    runs-on: ubuntu-latest
+    needs: [validate, plan-production]
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.environment == 'production' &&
+      github.event.inputs.action == 'apply'
+    defaults:
+      run:
+        working-directory: ./environments/production
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Download Plan
+        if: needs.plan-production.outputs.plan-exitcode == '2'
+        uses: actions/download-artifact@v4
+        with:
+          name: production-tfplan
+          path: environments/production/
+
+      - name: Terraform Apply
+        run: |
+          if [ -f tfplan ]; then
+            terraform apply -auto-approve tfplan
+          else
+            terraform apply -auto-approve
+          fi
+
+      - name: Get Outputs
+        id: outputs
+        run: |
+          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
+          echo "frontend_url=$(terraform output -raw frontend_url)" >> $GITHUB_OUTPUT
+          echo "dashboard_url=$(terraform output -raw cloudwatch_dashboard_url)" >> $GITHUB_OUTPUT
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Production Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Infrastructure Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "- **API URL**: ${{ steps.outputs.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend URL**: ${{ steps.outputs.outputs.frontend_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **CloudWatch Dashboard**: ${{ steps.outputs.outputs.dashboard_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [View API](${{ steps.outputs.outputs.api_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Frontend](${{ steps.outputs.outputs.frontend_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Monitoring](${{ steps.outputs.outputs.dashboard_url }})" >> $GITHUB_STEP_SUMMARY
+
+  destroy:
+    name: 'Destroy Infrastructure'
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    defaults:
+      run:
+        working-directory: ./environments/${{ github.event.inputs.environment }}
+    environment: ${{ github.event.inputs.environment }}-destroy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
+
+      - name: Destruction Summary
+        run: |
+          echo "## 💥 ${{ github.event.inputs.environment }} Infrastructure Destroyed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All resources in the ${{ github.event.inputs.environment }} environment have been destroyed." >> $GITHUB_STEP_SUMMARY

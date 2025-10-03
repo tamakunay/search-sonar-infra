@@ -103,6 +103,40 @@ search-sonar-infra/
 
 ## ⚡ Quick Start
 
+### Deployment Options
+
+Choose your preferred deployment method:
+
+#### Option A: GitHub Actions (Recommended) 🤖
+
+Automated CI/CD with GitHub Actions for production-ready deployments.
+
+**Setup:**
+```bash
+# 1. Set up GitHub secrets automatically
+./scripts/setup-github-secrets.sh
+
+# 2. Set up GitHub environments (manual step)
+# Go to Settings > Environments and create: staging, production
+
+# 3. Deploy via GitHub Actions
+# - Push to main branch = automatic staging deployment
+# - Use Actions tab for manual production deployment
+```
+
+**Benefits:**
+- ✅ Automated validation and deployment
+- ✅ Pull request planning and review
+- ✅ Environment protection rules
+- ✅ Deployment summaries and links
+- ✅ Audit trail and rollback capability
+
+[📚 **Detailed GitHub Actions Guide**](docs/github-actions.md)
+
+#### Option B: Local Deployment 💻
+
+Direct deployment from your local machine.
+
 ### 1. Clone and Configure
 
 ```bash
