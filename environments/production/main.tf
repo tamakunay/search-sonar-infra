@@ -89,6 +89,9 @@ module "ecs_cluster" {
   worker_cpu           = var.worker_cpu
   worker_memory        = var.worker_memory
   worker_desired_count = var.worker_desired_count
+
+  # Load Balancer Configuration
+  load_balancer_dns_name = module.load_balancer.dns_name
 }
 
 # Frontend Module (Amplify)
