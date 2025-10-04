@@ -91,7 +91,7 @@ module "ecs_cluster" {
   worker_desired_count = var.worker_desired_count
 
   # Load Balancer Configuration
-  load_balancer_dns_name = module.load_balancer.dns_name
+  load_balancer_dns_name = module.load_balancer.alb_dns_name
 }
 
 # Frontend Module (Amplify)
