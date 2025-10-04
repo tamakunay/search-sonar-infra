@@ -29,12 +29,8 @@ resource "aws_amplify_app" "main" {
     target = "/index.html"
   }
 
-  # API proxy rules
-  custom_rule {
-    source = "/api/<*>"
-    status = "200"
-    target = "${var.api_url}/<*>"
-  }
+  # Note: API proxy rules disabled for now since we don't have HTTPS setup
+  # You can enable this later when you configure a custom domain with SSL
 
   tags = var.common_tags
 }

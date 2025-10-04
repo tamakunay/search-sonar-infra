@@ -1,6 +1,6 @@
 # ElastiCache Parameter Group
 resource "aws_elasticache_parameter_group" "redis" {
-  family = "redis7.x"
+  family = "redis7"
   name   = "${var.name_prefix}-redis-params"
 
   # Optimize for BullMQ

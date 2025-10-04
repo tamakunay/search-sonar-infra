@@ -1,0 +1,162 @@
+name: 'Update Container Images'
+
+on:
+  repository_dispatch:
+    types: [update-images]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to update'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      git_commit:
+        description: 'Git commit hash for image tags'
+        required: true
+        type: string
+      api_image:
+        description: 'API image URI (optional - will be constructed if not provided)'
+        required: false
+        type: string
+      worker_image:
+        description: 'Worker image URI (optional - will be constructed if not provided)'
+        required: false
+        type: string
+
+env:
+  AWS_REGION: 'ap-southeast-1'
+  AWS_ACCOUNT_ID: '210901781719'
+
+jobs:
+  update-images:
+    name: 'Update Container Images'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set Variables
+        id: vars
+        run: |
+          # Get inputs from either workflow_dispatch or repository_dispatch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+            GIT_COMMIT="${{ github.event.inputs.git_commit }}"
+            API_IMAGE="${{ github.event.inputs.api_image }}"
+            WORKER_IMAGE="${{ github.event.inputs.worker_image }}"
+          else
+            ENVIRONMENT="${{ github.event.client_payload.environment }}"
+            GIT_COMMIT="${{ github.event.client_payload.git_commit }}"
+            API_IMAGE="${{ github.event.client_payload.api_image }}"
+            WORKER_IMAGE="${{ github.event.client_payload.worker_image }}"
+          fi
+          
+          # Construct image URIs if not provided
+          if [ -z "$API_IMAGE" ]; then
+            API_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-api-${ENVIRONMENT}:${GIT_COMMIT}"
+          fi
+          
+          if [ -z "$WORKER_IMAGE" ]; then
+            WORKER_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-worker-${ENVIRONMENT}:${GIT_COMMIT}"
+          fi
+          
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "git_commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
+          echo "api_image=${API_IMAGE}" >> $GITHUB_OUTPUT
+          echo "worker_image=${WORKER_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Verify Images Exist
+        run: |
+          echo "🔍 Verifying images exist in ECR..."
+          
+          # Extract repository names from image URIs
+          API_REPO=$(echo "${{ steps.vars.outputs.api_image }}" | cut -d'/' -f2 | cut -d':' -f1)
+          WORKER_REPO=$(echo "${{ steps.vars.outputs.worker_image }}" | cut -d'/' -f2 | cut -d':' -f1)
+          
+          # Check if images exist
+          if ! aws ecr describe-images --repository-name "$API_REPO" --image-ids imageTag="${{ steps.vars.outputs.git_commit }}" --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "❌ API image not found: ${{ steps.vars.outputs.api_image }}"
+            exit 1
+          fi
+          
+          if ! aws ecr describe-images --repository-name "$WORKER_REPO" --image-ids imageTag="${{ steps.vars.outputs.git_commit }}" --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "❌ Worker image not found: ${{ steps.vars.outputs.worker_image }}"
+            exit 1
+          fi
+          
+          echo "✅ Both images verified in ECR"
+
+      - name: Update Terraform Variables
+        run: |
+          TFVARS_FILE="environments/${{ steps.vars.outputs.environment }}/terraform.tfvars"
+          
+          echo "📝 Updating $TFVARS_FILE..."
+          
+          # Update image URIs
+          sed -i "s|api_image.*=.*|api_image = \"${{ steps.vars.outputs.api_image }}\"|g" "$TFVARS_FILE"
+          sed -i "s|worker_image.*=.*|worker_image = \"${{ steps.vars.outputs.worker_image }}\"|g" "$TFVARS_FILE"
+          
+          echo "✅ Updated terraform variables"
+          
+          # Show changes
+          echo "📋 Updated images:"
+          grep -E "(api_image|worker_image)" "$TFVARS_FILE"
+
+      - name: Commit Changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add "environments/${{ steps.vars.outputs.environment }}/terraform.tfvars"
+          git commit -m "feat: update container images to ${{ steps.vars.outputs.git_commit }}
+
+          - API: ${{ steps.vars.outputs.api_image }}
+          - Worker: ${{ steps.vars.outputs.worker_image }}
+          - Environment: ${{ steps.vars.outputs.environment }}"
+          
+          git push
+
+      - name: Trigger Deployment
+        if: steps.vars.outputs.environment == 'staging'
+        run: |
+          echo "🚀 Staging deployment will be triggered automatically by the push to main"
+          echo "🔗 Monitor progress at: ${{ github.server_url }}/${{ github.repository }}/actions"
+
+      - name: Production Deployment Instructions
+        if: steps.vars.outputs.environment == 'production'
+        run: |
+          echo "📋 For production deployment:"
+          echo "1. Go to Actions tab: ${{ github.server_url }}/${{ github.repository }}/actions"
+          echo "2. Run 'Search Sonar Infrastructure CI/CD' workflow"
+          echo "3. Select Environment: production, Action: apply"
+          
+          # Add to job summary
+          echo "## 🚀 Images Updated Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Updated Images" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: \`${{ steps.vars.outputs.api_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Worker**: \`${{ steps.vars.outputs.worker_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: \`${{ steps.vars.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.vars.outputs.environment }}" = "staging" ]; then
+            echo "✅ Staging deployment triggered automatically" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📋 Manual production deployment required:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Go to [Actions tab](${{ github.server_url }}/${{ github.repository }}/actions)" >> $GITHUB_STEP_SUMMARY
+            echo "2. Run **Search Sonar Infrastructure CI/CD** workflow" >> $GITHUB_STEP_SUMMARY
+            echo "3. Select Environment: **production**, Action: **apply**" >> $GITHUB_STEP_SUMMARY
+          fi

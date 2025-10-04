@@ -1,0 +1,115 @@
+# Add this to your application repository: .github/workflows/deploy.yml
+# This workflow builds images and triggers infrastructure deployment
+
+name: 'Build and Deploy'
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AWS_REGION: 'ap-southeast-1'
+  AWS_ACCOUNT_ID: '210901781719'
+
+jobs:
+  build-and-push:
+    name: 'Build and Push Images'
+    runs-on: ubuntu-latest
+    outputs:
+      git-commit: ${{ steps.vars.outputs.git-commit }}
+      api-image: ${{ steps.vars.outputs.api-image }}
+      worker-image: ${{ steps.vars.outputs.worker-image }}
+      environment: ${{ steps.vars.outputs.environment }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Variables
+        id: vars
+        run: |
+          GIT_COMMIT=$(git rev-parse HEAD | cut -c1-8)
+          ENVIRONMENT=${{ github.event.inputs.environment || 'staging' }}
+          
+          API_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-api-${ENVIRONMENT}:${GIT_COMMIT}"
+          WORKER_IMAGE="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-worker-${ENVIRONMENT}:${GIT_COMMIT}"
+          
+          echo "git-commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
+          echo "api-image=${API_IMAGE}" >> $GITHUB_OUTPUT
+          echo "worker-image=${WORKER_IMAGE}" >> $GITHUB_OUTPUT
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+      - name: Build and Push API Image
+        run: |
+          # Assuming your API is in apps/api directory
+          cd apps/api
+          docker build -t search-sonar-api .
+          docker tag search-sonar-api:latest ${{ steps.vars.outputs.api-image }}
+          docker tag search-sonar-api:latest ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-api-${{ steps.vars.outputs.environment }}:latest
+          docker push ${{ steps.vars.outputs.api-image }}
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-api-${{ steps.vars.outputs.environment }}:latest
+
+      - name: Build and Push Worker Image
+        run: |
+          # Assuming your worker is in apps/worker directory
+          cd apps/worker
+          docker build -t search-sonar-worker .
+          docker tag search-sonar-worker:latest ${{ steps.vars.outputs.worker-image }}
+          docker tag search-sonar-worker:latest ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-worker-${{ steps.vars.outputs.environment }}:latest
+          docker push ${{ steps.vars.outputs.worker-image }}
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/search-sonar-worker-${{ steps.vars.outputs.environment }}:latest
+
+  trigger-deployment:
+    name: 'Trigger Infrastructure Deployment'
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    
+    steps:
+      - name: Trigger Infrastructure Update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          repository: tamakunay/search-sonar-infra  # Your infrastructure repo
+          event-type: update-images
+          client-payload: |
+            {
+              "environment": "${{ needs.build-and-push.outputs.environment }}",
+              "git_commit": "${{ needs.build-and-push.outputs.git-commit }}",
+              "api_image": "${{ needs.build-and-push.outputs.api-image }}",
+              "worker_image": "${{ needs.build-and-push.outputs.worker-image }}"
+            }
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Build and Deployment Triggered!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Built Images" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: \`${{ needs.build-and-push.outputs.api-image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Worker**: \`${{ needs.build-and-push.outputs.worker-image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: \`${{ needs.build-and-push.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "Infrastructure deployment has been triggered in the [search-sonar-infra](https://github.com/tamakunay/search-sonar-infra) repository." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Monitor Infrastructure Deployment](https://github.com/tamakunay/search-sonar-infra/actions)" >> $GITHUB_STEP_SUMMARY
