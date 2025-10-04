@@ -32,5 +32,5 @@ api_desired_count    = 1
 worker_desired_count = 1
 
 # Container Images
-api_image    = "210901781719.dkr.ecr.ap-southeast-1.amazonaws.com/search-sonar-api-staging:latest"
-worker_image = "210901781719.dkr.ecr.ap-southeast-1.amazonaws.com/search-sonar-worker-staging:latest"
+api_image    = "210901781719.dkr.ecr.ap-southeast-1.amazonaws.com/search-sonar-api-staging:staging-v2025.10.04-23d88034"
+worker_image = "210901781719.dkr.ecr.ap-southeast-1.amazonaws.com/search-sonar-worker-staging:staging-v2025.10.04-23d88034"

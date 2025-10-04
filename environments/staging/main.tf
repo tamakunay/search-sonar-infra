@@ -20,7 +20,7 @@ module "networking" {
   name_prefix        = local.name_prefix
   common_tags        = local.common_tags
   availability_zones = slice(data.aws_availability_zones.available.names, 0, 2)
-  enable_nat_gateway = false # Cost optimization for staging
+  enable_nat_gateway = true # Required for ECS tasks to access AWS services
 }
 
 # Database Module
@@ -77,6 +77,7 @@ module "ecs_cluster" {
   db_connection_secret_arn    = module.database.db_connection_secret_arn
   redis_connection_secret_arn = module.cache.redis_connection_secret_arn
   api_target_group_arn        = module.load_balancer.api_target_group_arn
+  load_balancer_dns_name      = module.load_balancer.alb_dns_name
 
   # API Configuration
   api_image         = var.api_image

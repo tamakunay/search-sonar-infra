@@ -171,7 +171,7 @@ resource "aws_secretsmanager_secret_version" "db_connection" {
     database = aws_db_instance.main.db_name
     username = aws_db_instance.main.username
     password = random_password.db_password.result
-    url      = "postgresql://${aws_db_instance.main.username}:${random_password.db_password.result}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${aws_db_instance.main.db_name}"
+    url      = "postgresql://${aws_db_instance.main.username}:${random_password.db_password.result}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/${aws_db_instance.main.db_name}?sslmode=require"
   })
 }
 

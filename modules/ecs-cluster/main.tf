@@ -1,3 +1,31 @@
+# Application secrets for JWT and other sensitive data
+resource "aws_secretsmanager_secret" "app_secrets" {
+  name        = "${var.name_prefix}-app-secrets"
+  description = "Application secrets for JWT and other sensitive configuration"
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}-app-secrets"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "app_secrets" {
+  secret_id = aws_secretsmanager_secret.app_secrets.id
+  secret_string = jsonencode({
+    jwt_secret         = "your-super-secret-jwt-key-change-this-in-production-${random_password.jwt_secret.result}"
+    jwt_refresh_secret = "your-super-secret-refresh-key-change-this-in-production-${random_password.jwt_refresh_secret.result}"
+  })
+}
+
+resource "random_password" "jwt_secret" {
+  length  = 64
+  special = true
+}
+
+resource "random_password" "jwt_refresh_secret" {
+  length  = 64
+  special = true
+}
+
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "${var.name_prefix}-cluster"
@@ -80,7 +108,8 @@ resource "aws_iam_role_policy" "ecs_secrets_policy" {
         ]
         Resource = [
           var.db_connection_secret_arn,
-          var.redis_connection_secret_arn
+          var.redis_connection_secret_arn,
+          aws_secretsmanager_secret.app_secrets.arn
         ]
       }
     ]
@@ -122,7 +151,8 @@ resource "aws_iam_role_policy" "ecs_task_policy" {
         ]
         Resource = [
           var.db_connection_secret_arn,
-          var.redis_connection_secret_arn
+          var.redis_connection_secret_arn,
+          aws_secretsmanager_secret.app_secrets.arn
         ]
       },
       {
@@ -157,7 +187,7 @@ resource "aws_ecs_task_definition" "api" {
 
       portMappings = [
         {
-          containerPort = 3000
+          containerPort = 4000
           protocol      = "tcp"
         }
       ]
@@ -169,18 +199,94 @@ resource "aws_ecs_task_definition" "api" {
         },
         {
           name  = "PORT"
-          value = "3000"
+          value = "4000"
+        },
+        {
+          name  = "BASE_PATH"
+          value = "api"
+        },
+        {
+          name  = "LOG_LEVEL"
+          value = var.environment == "production" ? "info" : "debug"
+        },
+        {
+          name  = "SALT_ROUNDS"
+          value = "10"
+        },
+        {
+          name  = "JWT_EXPIRATION"
+          value = "15m"
+        },
+        {
+          name  = "JWT_REFRESH_EXPIRATION"
+          value = "7d"
+        },
+        {
+          name  = "EMAIL_ENABLED"
+          value = "false"
+        },
+        {
+          name  = "CSV_MAX_FILE_SIZE_MB"
+          value = "10"
+        },
+        {
+          name  = "CSV_MAX_KEYWORDS"
+          value = "100"
+        },
+        {
+          name  = "APP_URL"
+          value = "http://${var.load_balancer_dns_name}"
+        },
+        {
+          name  = "POSTGRES_SSL"
+          value = "true"
+        },
+        {
+          name  = "PGSSLMODE"
+          value = "require"
         }
       ]
 
       secrets = [
         {
-          name      = "DATABASE_URL"
-          valueFrom = var.db_connection_secret_arn
+          name      = "POSTGRES_HOST"
+          valueFrom = "${var.db_connection_secret_arn}:host::"
         },
         {
-          name      = "REDIS_URL"
-          valueFrom = var.redis_connection_secret_arn
+          name      = "POSTGRES_PORT"
+          valueFrom = "${var.db_connection_secret_arn}:port::"
+        },
+        {
+          name      = "POSTGRES_USER"
+          valueFrom = "${var.db_connection_secret_arn}:username::"
+        },
+        {
+          name      = "POSTGRES_PASSWORD"
+          valueFrom = "${var.db_connection_secret_arn}:password::"
+        },
+        {
+          name      = "POSTGRES_DB"
+          valueFrom = "${var.db_connection_secret_arn}:database::"
+        },
+        {
+          name      = "REDIS_HOST"
+          valueFrom = "${var.redis_connection_secret_arn}:host::"
+        },
+        {
+          name      = "REDIS_PORT"
+          valueFrom = "${var.redis_connection_secret_arn}:port::"
+        },
+        {
+          name      = "REDIS_PASSWORD"
+          valueFrom = "${var.redis_connection_secret_arn}:auth_token::"
+        },
+        {
+          name      = "JWT_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:jwt_secret::"
+        },
+        {
+          name      = "JWT_REFRESH_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:jwt_refresh_secret::"
         }
       ]
 
@@ -227,17 +333,61 @@ resource "aws_ecs_task_definition" "worker" {
         {
           name  = "NODE_ENV"
           value = var.environment
+        },
+        {
+          name  = "LOG_LEVEL"
+          value = var.environment == "production" ? "info" : "debug"
+        },
+        {
+          name  = "POSTGRES_SSL"
+          value = "true"
+        },
+        {
+          name  = "PGSSLMODE"
+          value = "require"
         }
       ]
 
       secrets = [
         {
-          name      = "DATABASE_URL"
-          valueFrom = var.db_connection_secret_arn
+          name      = "POSTGRES_HOST"
+          valueFrom = "${var.db_connection_secret_arn}:host::"
         },
         {
-          name      = "REDIS_URL"
-          valueFrom = var.redis_connection_secret_arn
+          name      = "POSTGRES_PORT"
+          valueFrom = "${var.db_connection_secret_arn}:port::"
+        },
+        {
+          name      = "POSTGRES_USER"
+          valueFrom = "${var.db_connection_secret_arn}:username::"
+        },
+        {
+          name      = "POSTGRES_PASSWORD"
+          valueFrom = "${var.db_connection_secret_arn}:password::"
+        },
+        {
+          name      = "POSTGRES_DB"
+          valueFrom = "${var.db_connection_secret_arn}:database::"
+        },
+        {
+          name      = "REDIS_HOST"
+          valueFrom = "${var.redis_connection_secret_arn}:host::"
+        },
+        {
+          name      = "REDIS_PORT"
+          valueFrom = "${var.redis_connection_secret_arn}:port::"
+        },
+        {
+          name      = "REDIS_PASSWORD"
+          valueFrom = "${var.redis_connection_secret_arn}:auth_token::"
+        },
+        {
+          name      = "JWT_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:jwt_secret::"
+        },
+        {
+          name      = "JWT_REFRESH_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:jwt_refresh_secret::"
         }
       ]
 
@@ -274,7 +424,7 @@ resource "aws_ecs_service" "api" {
   load_balancer {
     target_group_arn = var.api_target_group_arn
     container_name   = "api"
-    container_port   = 3000
+    container_port   = 4000
   }
 
   depends_on = [var.api_target_group_arn]

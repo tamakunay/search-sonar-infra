@@ -15,22 +15,26 @@ resource "aws_lb" "main" {
 
 # Target Group for API
 resource "aws_lb_target_group" "api" {
-  name        = "${var.name_prefix}-api-tg"
-  port        = 3000
+  name        = "${var.name_prefix}-api-tg-v2"
+  port        = 4000
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 60
     matcher             = "200"
-    path                = "/health"
+    path                = "/api/v1/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
   tags = merge(var.common_tags, {

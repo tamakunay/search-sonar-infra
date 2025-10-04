@@ -44,6 +44,11 @@ variable "api_target_group_arn" {
   type        = string
 }
 
+variable "load_balancer_dns_name" {
+  description = "DNS name of the load balancer"
+  type        = string
+}
+
 # API Configuration
 variable "api_image" {
   description = "Docker image for API service"
