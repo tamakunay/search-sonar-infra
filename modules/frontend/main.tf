@@ -28,6 +28,8 @@ resource "aws_amplify_app" "main" {
       AMPLIFY_MONOREPO_APP_ROOT = "apps/web"
       NODE_ENV                  = var.environment
       VITE_APP_NAME             = "Search Sonar"
+      VITE_API_URL              = var.api_url
+      VITE_API_VERSION          = "v1"
     },
     var.environment_variables
   )

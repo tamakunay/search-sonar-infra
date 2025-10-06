@@ -300,6 +300,34 @@ resource "aws_ecs_task_definition" "api" {
           value = "false"
         },
         {
+          name  = "EMAIL_HOST"
+          value = ""
+        },
+        {
+          name  = "EMAIL_PORT"
+          value = "587"
+        },
+        {
+          name  = "EMAIL_SECURE"
+          value = "false"
+        },
+        {
+          name  = "EMAIL_USER"
+          value = ""
+        },
+        {
+          name  = "EMAIL_PASS"
+          value = ""
+        },
+        {
+          name  = "EMAIL_FROM"
+          value = ""
+        },
+        {
+          name  = "EMAIL_FROM_NAME"
+          value = ""
+        },
+        {
           name  = "CSV_MAX_FILE_SIZE_MB"
           value = "10"
         },
@@ -419,8 +447,138 @@ resource "aws_ecs_task_definition" "worker" {
         {
           name  = "PGSSLMODE"
           value = "require"
+        },
+        {
+          name  = "EMAIL_ENABLED"
+          value = "false"
+        },
+        {
+          name  = "EMAIL_HOST"
+          value = ""
+        },
+        {
+          name  = "EMAIL_PORT"
+          value = "587"
+        },
+        {
+          name  = "EMAIL_SECURE"
+          value = "false"
+        },
+        {
+          name  = "EMAIL_USER"
+          value = ""
+        },
+        {
+          name  = "EMAIL_PASS"
+          value = ""
+        },
+        {
+          name  = "EMAIL_FROM"
+          value = ""
+        },
+        {
+          name  = "EMAIL_FROM_NAME"
+          value = ""
+        },
+        {
+          name  = "PORT"
+          value = "3002"
+        },
+        {
+          name  = "WORKER_CONCURRENCY"
+          value = "1"
+        },
+        {
+          name  = "MAX_CONCURRENT_JOBS"
+          value = "1"
+        },
+        {
+          name  = "QUEUE_NAME"
+          value = "keyword-processing"
+        },
+        {
+          name  = "JOB_ATTEMPTS"
+          value = "3"
+        },
+        {
+          name  = "JOB_BACKOFF_DELAY"
+          value = "5000"
+        },
+        {
+          name  = "USER_AGENTS"
+          value = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+        {
+          name  = "REQUEST_DELAY_MIN"
+          value = "2000"
+        },
+        {
+          name  = "REQUEST_DELAY_MAX"
+          value = "5000"
+        },
+        {
+          name  = "PAGE_TIMEOUT"
+          value = "30000"
+        },
+        {
+          name  = "SCRAPING_TIMEOUT"
+          value = "30000"
+        },
+        {
+          name  = "PUPPETEER_HEADLESS"
+          value = "true"
+        },
+        {
+          name  = "HEADLESS"
+          value = "true"
+        },
+        {
+          name  = "PUPPETEER_EXECUTABLE_PATH"
+          value = ""
+        },
+        {
+          name  = "PUPPETEER_ARGS"
+          value = "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage"
+        },
+        {
+          name  = "WEBSOCKET_URL"
+          value = "ws://${var.load_balancer_dns_name}:3001"
+        },
+        {
+          name  = "WEBSOCKET_NAMESPACE"
+          value = "/keywords-progress"
+        },
+        {
+          name  = "LOG_FORMAT"
+          value = "json"
+        },
+        {
+          name  = "MAX_RETRIES"
+          value = "3"
+        },
+        {
+          name  = "RETRY_DELAY"
+          value = "5000"
+        },
+        {
+          name  = "CIRCUIT_BREAKER_THRESHOLD"
+          value = "5"
+        },
+        {
+          name  = "MEMORY_LIMIT"
+          value = "512"
+        },
+        {
+          name  = "CPU_LIMIT"
+          value = "1"
         }
       ]
+
+      # Note: DATABASE_URL and REDIS_URL are constructed from individual components
+      # in the application code since ECS doesn't support dynamic secret interpolation
+      # in environment variables. The worker should construct these URLs like:
+      # DATABASE_URL = `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}`
+      # REDIS_URL = `redis://${REDIS_PASSWORD ? ':' + REDIS_PASSWORD + '@' : ''}${REDIS_HOST}:${REDIS_PORT}`
 
       secrets = [
         {
