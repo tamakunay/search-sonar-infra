@@ -1,7 +1,9 @@
 # Application secrets for JWT and other sensitive data
 resource "aws_secretsmanager_secret" "app_secrets" {
-  name        = "${var.name_prefix}-app-secrets"
-  description = "Application secrets for JWT and other sensitive configuration"
+  name                           = "${var.name_prefix}-app-secrets"
+  description                    = "Application secrets for JWT and other sensitive configuration"
+  recovery_window_in_days        = 0 # Force immediate deletion to avoid conflicts
+  force_overwrite_replica_secret = true
 
   tags = merge(var.common_tags, {
     Name = "${var.name_prefix}-app-secrets"
@@ -189,75 +191,10 @@ resource "aws_ecs_task_definition" "api" {
   task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
-    # Migration init container - runs before API starts
-    {
-      name  = "migration"
-      image = var.api_image
-
-      # This container runs migrations and exits
-      command = ["npm", "run", "migration:deploy"]
-
-      environment = [
-        {
-          name  = "NODE_ENV"
-          value = var.environment
-        },
-        {
-          name  = "POSTGRES_SSL"
-          value = "true"
-        },
-        {
-          name  = "PGSSLMODE"
-          value = "require"
-        }
-      ]
-
-      secrets = [
-        {
-          name      = "POSTGRES_HOST"
-          valueFrom = "${var.db_connection_secret_arn}:host::"
-        },
-        {
-          name      = "POSTGRES_PORT"
-          valueFrom = "${var.db_connection_secret_arn}:port::"
-        },
-        {
-          name      = "POSTGRES_USER"
-          valueFrom = "${var.db_connection_secret_arn}:username::"
-        },
-        {
-          name      = "POSTGRES_PASSWORD"
-          valueFrom = "${var.db_connection_secret_arn}:password::"
-        },
-        {
-          name      = "POSTGRES_DB"
-          valueFrom = "${var.db_connection_secret_arn}:database::"
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "migration"
-        }
-      }
-
-      essential = false # This container can exit after running migrations
-    },
     # Main API container
     {
       name  = "api"
       image = var.api_image
-
-      # Wait for migration container to complete
-      dependsOn = [
-        {
-          containerName = "migration"
-          condition     = "SUCCESS"
-        }
-      ]
 
       portMappings = [
         {

@@ -1,7 +1,9 @@
 # GitHub Token Secret
 resource "aws_secretsmanager_secret" "github_token" {
-  name        = "${var.name_prefix}-github-token"
-  description = "GitHub personal access token for Amplify"
+  name                           = "${var.name_prefix}-github-token"
+  description                    = "GitHub personal access token for Amplify"
+  recovery_window_in_days        = 0 # Force immediate deletion to avoid conflicts
+  force_overwrite_replica_secret = true
 
   tags = merge(var.common_tags, {
     Name = "${var.name_prefix}-github-token"
