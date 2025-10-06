@@ -1,7 +1,23 @@
+# GitHub Token Secret
+resource "aws_secretsmanager_secret" "github_token" {
+  name        = "${var.name_prefix}-github-token"
+  description = "GitHub personal access token for Amplify"
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}-github-token"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "github_token" {
+  secret_id     = aws_secretsmanager_secret.github_token.id
+  secret_string = var.github_token
+}
+
 # Amplify App
 resource "aws_amplify_app" "main" {
-  name       = "${var.name_prefix}-web"
-  repository = var.repository_url
+  name         = "${var.name_prefix}-web"
+  repository   = var.repository_url
+  access_token = var.github_token
 
   # Build settings
   build_spec = var.build_spec != "" ? var.build_spec : file("${path.module}/amplify.yml")
@@ -53,6 +69,10 @@ resource "aws_iam_role" "amplify" {
   })
 
   tags = var.common_tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "amplify_backend_deploy" {

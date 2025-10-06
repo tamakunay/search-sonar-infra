@@ -6,7 +6,8 @@ project_name = "search-sonar"
 environment  = "staging"
 
 # Repository Configuration
-repository_url = "https://github.com/tamakunay/search-sonar-infra"
+repository_url = "https://github.com/tamakunay/search-sonar-app"
+# github_token is provided via TF_VAR_github_token environment variable
 
 # Domain Configuration
 domain_name = ""

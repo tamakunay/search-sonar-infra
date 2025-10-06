@@ -19,6 +19,12 @@ variable "repository_url" {
   type        = string
 }
 
+variable "github_token" {
+  description = "GitHub personal access token for Amplify"
+  type        = string
+  sensitive   = true
+}
+
 variable "api_url" {
   description = "API URL for the frontend to connect to"
   type        = string

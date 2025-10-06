@@ -105,6 +105,7 @@ module "frontend" {
   api_url               = module.load_balancer.api_url
   domain_name           = var.domain_name
   create_develop_branch = true
+  github_token          = var.github_token
 }
 
 # Monitoring Module

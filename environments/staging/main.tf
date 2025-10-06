@@ -104,6 +104,7 @@ module "frontend" {
   domain_name           = var.domain_name
   create_develop_branch = false # Only main branch for staging
   main_branch_name      = "staging"
+  github_token          = var.github_token
 }
 
 # Monitoring Module (simplified for staging)

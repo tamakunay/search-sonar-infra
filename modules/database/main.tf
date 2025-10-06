@@ -137,6 +137,10 @@ resource "aws_iam_role" "rds_enhanced_monitoring" {
   })
 
   tags = var.common_tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {

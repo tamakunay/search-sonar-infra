@@ -86,6 +86,10 @@ resource "aws_iam_role" "ecs_task_execution_role" {
   })
 
   tags = var.common_tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
@@ -134,6 +138,10 @@ resource "aws_iam_role" "ecs_task_role" {
   })
 
   tags = var.common_tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Task role policy for application-specific permissions
@@ -181,9 +189,75 @@ resource "aws_ecs_task_definition" "api" {
   task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
+    # Migration init container - runs before API starts
+    {
+      name  = "migration"
+      image = var.api_image
+
+      # This container runs migrations and exits
+      command = ["npm", "run", "migration:deploy"]
+
+      environment = [
+        {
+          name  = "NODE_ENV"
+          value = var.environment
+        },
+        {
+          name  = "POSTGRES_SSL"
+          value = "true"
+        },
+        {
+          name  = "PGSSLMODE"
+          value = "require"
+        }
+      ]
+
+      secrets = [
+        {
+          name      = "POSTGRES_HOST"
+          valueFrom = "${var.db_connection_secret_arn}:host::"
+        },
+        {
+          name      = "POSTGRES_PORT"
+          valueFrom = "${var.db_connection_secret_arn}:port::"
+        },
+        {
+          name      = "POSTGRES_USER"
+          valueFrom = "${var.db_connection_secret_arn}:username::"
+        },
+        {
+          name      = "POSTGRES_PASSWORD"
+          valueFrom = "${var.db_connection_secret_arn}:password::"
+        },
+        {
+          name      = "POSTGRES_DB"
+          valueFrom = "${var.db_connection_secret_arn}:database::"
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "migration"
+        }
+      }
+
+      essential = false  # This container can exit after running migrations
+    },
+    # Main API container
     {
       name  = "api"
       image = var.api_image
+
+      # Wait for migration container to complete
+      dependsOn = [
+        {
+          containerName = "migration"
+          condition     = "SUCCESS"
+        }
+      ]
 
       portMappings = [
         {
@@ -300,11 +374,11 @@ resource "aws_ecs_task_definition" "api" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+        command     = ["CMD-SHELL", "curl -f http://localhost:4000/api/v1/health || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3
-        startPeriod = 60
+        startPeriod = 90  # Increased to allow time for migrations
       }
 
       essential = true
