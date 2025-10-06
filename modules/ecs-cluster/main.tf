@@ -244,7 +244,7 @@ resource "aws_ecs_task_definition" "api" {
         }
       }
 
-      essential = false  # This container can exit after running migrations
+      essential = false # This container can exit after running migrations
     },
     # Main API container
     {
@@ -378,7 +378,7 @@ resource "aws_ecs_task_definition" "api" {
         interval    = 30
         timeout     = 5
         retries     = 3
-        startPeriod = 90  # Increased to allow time for migrations
+        startPeriod = 90 # Increased to allow time for migrations
       }
 
       essential = true
